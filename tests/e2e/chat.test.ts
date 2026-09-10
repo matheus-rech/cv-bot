@@ -54,8 +54,10 @@ test.describe('Chat activity', () => {
   test('Stop generation during submission', async () => {
     await chatPage.sendUserMessage('Why is grass green?');
 
-    // Every streamed token grows the message list and shifts the composer, so the button never holds still long enough for the actionability check to pass; asserting it visible first only widens the window in which the generation can end and take it away.
-    await chatPage.stopButton.click({ force: true });
+    // The composer re-renders on every streamed token, so the button never holds still for the actionability check and a plain click spends the whole streaming window waiting for stability. Force past that check and retry quickly, since the only genuinely racy part left is the button's entry animation.
+    await expect(async () => {
+      await chatPage.stopButton.click({ force: true, timeout: 200 });
+    }).toPass({ timeout: 10000, intervals: [50] });
 
     await expect(chatPage.sendButton).toBeVisible();
   });
