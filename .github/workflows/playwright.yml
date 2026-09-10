@@ -9,11 +9,38 @@ jobs:
   test:
     timeout-minutes: 30
     runs-on: ubuntu-latest
+
+    # The suite registers accounts and holds chat streams, so it needs a database and a stream store of its own; a run with neither leaves auth without a secret and every request 500s until the job hits its timeout.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: chatbot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
-      AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-      POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+      # A configured secret still wins, so pointing the run at a real environment stays a matter of setting one.
+      AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'playwright-e2e-secret' }}
+      POSTGRES_URL: ${{ secrets.POSTGRES_URL || 'postgres://postgres:postgres@localhost:5432/chatbot' }}
       BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-      REDIS_URL: ${{ secrets.REDIS_URL }}
+      REDIS_URL: ${{ secrets.REDIS_URL || 'redis://localhost:6379' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +77,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Apply database migrations
+        run: pnpm exec tsx lib/db/migrate.ts
 
       - name: Cache Playwright browsers
         uses: actions/cache@v3
