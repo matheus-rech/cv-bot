@@ -204,10 +204,18 @@ export class ChatPage {
       async edit(newMessage: string) {
         await page.getByTestId('message-edit-button').click();
         await page.getByTestId('message-editor').fill(newMessage);
+
+        // waitForResponse only sees responses that arrive after it is called, so the resubmit has to be watched from before the click or a fast generation is missed and the wait runs to the test timeout.
+        const generation = page.waitForResponse((response) =>
+          response.url().includes('/api/chat'),
+        );
+
         await page.getByTestId('message-editor-send-button').click();
         await expect(
           page.getByTestId('message-editor-send-button'),
         ).not.toBeVisible();
+
+        await (await generation).finished();
       },
     };
   }
