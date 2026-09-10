@@ -54,7 +54,10 @@ test.describe('Chat activity', () => {
   test('Stop generation during submission', async () => {
     await chatPage.sendUserMessage('Why is grass green?');
     await expect(chatPage.stopButton).toBeVisible();
-    await chatPage.stopButton.click();
+
+    // Every streamed token grows the message list and shifts the composer, so the button never holds still long enough for the actionability check to pass, and by the time streaming stops it has been replaced by the send button.
+    await chatPage.stopButton.click({ force: true });
+
     await expect(chatPage.sendButton).toBeVisible();
   });
 
@@ -119,7 +122,6 @@ test.describe('Chat activity', () => {
 
     const assistantMessage = await chatPage.getRecentAssistantMessage();
     await assistantMessage.upvote();
-    await chatPage.isVoteComplete();
   });
 
   test('Downvote message', async () => {
@@ -128,7 +130,6 @@ test.describe('Chat activity', () => {
 
     const assistantMessage = await chatPage.getRecentAssistantMessage();
     await assistantMessage.downvote();
-    await chatPage.isVoteComplete();
   });
 
   test('Update vote', async () => {
@@ -137,10 +138,8 @@ test.describe('Chat activity', () => {
 
     const assistantMessage = await chatPage.getRecentAssistantMessage();
     await assistantMessage.upvote();
-    await chatPage.isVoteComplete();
 
     await assistantMessage.downvote();
-    await chatPage.isVoteComplete();
   });
 
   test('Create message from url query', async ({ page }) => {

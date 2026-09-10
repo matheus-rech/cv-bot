@@ -48,14 +48,6 @@ export class ChatPage {
     await response.finished();
   }
 
-  async isVoteComplete() {
-    const response = await this.page.waitForResponse((response) =>
-      response.url().includes('/api/vote'),
-    );
-
-    await response.finished();
-  }
-
   async hasChatIdInUrl() {
     await expect(this.page).toHaveURL(
       /^http:\/\/localhost:3000\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
@@ -155,6 +147,19 @@ export class ChatPage {
       )
       .catch(() => null);
 
+    const page = this.page;
+
+    // A vote answers immediately, and waitForResponse only sees responses that arrive after it is called, so the wait has to be armed before the click or the test hangs to its timeout.
+    const clickAndAwaitVote = async (testId: string) => {
+      const vote = page.waitForResponse((response) =>
+        response.url().includes('/api/vote'),
+      );
+
+      await lastMessageElement.getByTestId(testId).click();
+
+      await (await vote).finished();
+    };
+
     return {
       element: lastMessageElement,
       content,
@@ -165,10 +170,10 @@ export class ChatPage {
           .click();
       },
       async upvote() {
-        await lastMessageElement.getByTestId('message-upvote').click();
+        await clickAndAwaitVote('message-upvote');
       },
       async downvote() {
-        await lastMessageElement.getByTestId('message-downvote').click();
+        await clickAndAwaitVote('message-downvote');
       },
     };
   }
