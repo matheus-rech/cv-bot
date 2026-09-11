@@ -49,7 +49,6 @@ test.describe('chat activity with reasoning', () => {
     const userMessage = await chatPage.getRecentUserMessage();
 
     await userMessage.edit('Why is grass green?');
-    await chatPage.isGenerationComplete();
 
     const updatedAssistantMessage = await chatPage.getRecentAssistantMessage();
 

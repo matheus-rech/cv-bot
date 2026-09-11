@@ -1,10 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chatModels } from '@/lib/ai/models';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Page, type Response } from '@playwright/test';
 
 export class ChatPage {
-  constructor(private page: Page) {}
+  private generations: Response[] = [];
+  private generationsAwaited = 0;
+
+  constructor(private page: Page) {
+    // waitForResponse only sees responses that arrive after it is called, and a mocked generation regularly finishes first, so every generation is recorded from the moment this page object exists and handed out in order.
+    page.on('response', (response) => {
+      if (response.url().includes('/api/chat')) {
+        this.generations.push(response);
+      }
+    });
+  }
 
   public get sendButton() {
     return this.page.getByTestId('send-button');
@@ -28,6 +38,8 @@ export class ChatPage {
 
   async createNewChat() {
     await this.page.goto('/');
+    this.generations = [];
+    this.generationsAwaited = 0;
   }
 
   public getCurrentURL(): string {
@@ -41,17 +53,12 @@ export class ChatPage {
   }
 
   async isGenerationComplete() {
-    const response = await this.page.waitForResponse((response) =>
-      response.url().includes('/api/chat'),
-    );
+    await expect
+      .poll(() => this.generations.length, { timeout: 60_000 })
+      .toBeGreaterThan(this.generationsAwaited);
 
-    await response.finished();
-  }
-
-  async isVoteComplete() {
-    const response = await this.page.waitForResponse((response) =>
-      response.url().includes('/api/vote'),
-    );
+    const response = this.generations[this.generationsAwaited];
+    this.generationsAwaited += 1;
 
     await response.finished();
   }
@@ -155,6 +162,19 @@ export class ChatPage {
       )
       .catch(() => null);
 
+    const page = this.page;
+
+    // A vote answers immediately, and waitForResponse only sees responses that arrive after it is called, so the wait has to be armed before the click or the test hangs to its timeout.
+    const clickAndAwaitVote = async (testId: string) => {
+      const vote = page.waitForResponse((response) =>
+        response.url().includes('/api/vote'),
+      );
+
+      await lastMessageElement.getByTestId(testId).click();
+
+      await (await vote).finished();
+    };
+
     return {
       element: lastMessageElement,
       content,
@@ -165,10 +185,10 @@ export class ChatPage {
           .click();
       },
       async upvote() {
-        await lastMessageElement.getByTestId('message-upvote').click();
+        await clickAndAwaitVote('message-upvote');
       },
       async downvote() {
-        await lastMessageElement.getByTestId('message-downvote').click();
+        await clickAndAwaitVote('message-downvote');
       },
     };
   }
@@ -196,6 +216,7 @@ export class ChatPage {
       : [];
 
     const page = this.page;
+    const chatPage = this;
 
     return {
       element: lastMessageElement,
@@ -204,10 +225,13 @@ export class ChatPage {
       async edit(newMessage: string) {
         await page.getByTestId('message-edit-button').click();
         await page.getByTestId('message-editor').fill(newMessage);
+
         await page.getByTestId('message-editor-send-button').click();
         await expect(
           page.getByTestId('message-editor-send-button'),
         ).not.toBeVisible();
+
+        await chatPage.isGenerationComplete();
       },
     };
   }

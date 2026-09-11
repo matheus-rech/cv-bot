@@ -53,8 +53,10 @@ test.describe('Chat activity', () => {
 
   test('Stop generation during submission', async () => {
     await chatPage.sendUserMessage('Why is grass green?');
+
     await expect(chatPage.stopButton).toBeVisible();
     await chatPage.stopButton.click();
+
     await expect(chatPage.sendButton).toBeVisible();
   });
 
@@ -68,8 +70,6 @@ test.describe('Chat activity', () => {
     const userMessage = await chatPage.getRecentUserMessage();
     await userMessage.edit('Why is the sky blue?');
 
-    await chatPage.isGenerationComplete();
-
     const updatedAssistantMessage = await chatPage.getRecentAssistantMessage();
     expect(updatedAssistantMessage.content).toContain("It's just blue duh!");
   });
@@ -81,6 +81,12 @@ test.describe('Chat activity', () => {
   });
 
   test('Upload file and send image attachment with message', async () => {
+    // Attachments go to Vercel Blob, which has no local or containerised stand-in, so this one needs the real token rather than a provisioned service.
+    test.skip(
+      !process.env.BLOB_READ_WRITE_TOKEN,
+      'Set BLOB_READ_WRITE_TOKEN to exercise attachment upload',
+    );
+
     await chatPage.addImageAttachment();
 
     await chatPage.isElementVisible('attachments-preview');
@@ -115,7 +121,6 @@ test.describe('Chat activity', () => {
 
     const assistantMessage = await chatPage.getRecentAssistantMessage();
     await assistantMessage.upvote();
-    await chatPage.isVoteComplete();
   });
 
   test('Downvote message', async () => {
@@ -124,7 +129,6 @@ test.describe('Chat activity', () => {
 
     const assistantMessage = await chatPage.getRecentAssistantMessage();
     await assistantMessage.downvote();
-    await chatPage.isVoteComplete();
   });
 
   test('Update vote', async () => {
@@ -133,10 +137,8 @@ test.describe('Chat activity', () => {
 
     const assistantMessage = await chatPage.getRecentAssistantMessage();
     await assistantMessage.upvote();
-    await chatPage.isVoteComplete();
 
     await assistantMessage.downvote();
-    await chatPage.isVoteComplete();
   });
 
   test('Create message from url query', async ({ page }) => {
